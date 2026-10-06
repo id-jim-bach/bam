@@ -106,6 +106,12 @@ static void cache_setup_header(const char type[4])
 	}
 #endif
 
+#ifdef BAM_FAMILY_WINDOWS
+	#define io_unlink(filename) remove(filename)
+#else
+	#define io_unlink(filename) unlink(filename)
+#endif
+
 static int io_read_cachefile(const char *filename, const char *type, void **buffer, unsigned long *buffersize)
 {
 	unsigned long filesize;
@@ -356,10 +362,11 @@ int scancache_save(const char *filename, struct GRAPH *graph)
 	
 	if(scancache_write_header(&info) || scancache_write_nodes(&info))
 	{
-		/* error occured */
-		printf("%s: warning: error saving scan cache file '%s'\n", session.name, filename);
+		/* error occured, delete the cache file so we don't leave a corrupted file */
+		printf("%s: warning: error saving scan cache file '%s', deleting it\n", session.name, filename);
 		io_close(info.fp);
-		io_close(io_open_write(filename));
+		io_unlink(tmpfilename);
+		io_unlink(filename);
 		return -1;
 	}
 
@@ -620,10 +627,11 @@ int depcache_save(const char *filename, struct GRAPH *graph)
 	
 	if(write_header(&info) || write_nodes(&info))
 	{
-		/* error occured */
-		printf("%s: warning: error saving cache file '%s'\n", session.name, filename);
+		/* error occured, delete the cache file so we don't leave a corrupted file */
+		printf("%s: warning: error saving cache file '%s', deleting it\n", session.name, filename);
 		io_close(info.fp);
-		io_close(io_open_write(filename));
+		io_unlink(tmpfilename);
+		io_unlink(filename);
 		return -1;
 	}
 
@@ -889,9 +897,11 @@ int outputcache_save(const char *filename, struct OUTPUTCACHE *oldcache, struct 
 	/* write down to disk */
 	if(validate_outputcache(output, num_outputs) || io_write(fp, output, output_size) != output_size)
 	{
-		/* error occured, trunc the cache file so we don't leave a corrupted file */
-		printf("%s: warning: error saving cache file '%s'\n", session.name, filename);
+		/* error occured, delete the cache file so we don't leave a corrupted file */
+		printf("%s: warning: error saving cache file '%s', deleting it\n", session.name, filename);
 		io_close(fp);
+		io_unlink(tmpfilename);
+		io_unlink(filename);
 		free(output);
 		return -1;
 	}
