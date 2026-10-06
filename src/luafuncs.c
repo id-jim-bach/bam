@@ -1139,7 +1139,7 @@ int lf_path_join(lua_State *L)
 	err = path_join(base, base_len, extend, extend_len, buffer, 2*1024);
 	if(err != 0)
 	{
-		luaL_error(L, "path_join: error %d, couldn't join\n\t'%s'\n  and\n\t'%s'",
+		luaL_error(L, "path_join: error %d, couldn't join '%s' and '%s'",
 			err,
 			lua_tostring(L, 1),
 			lua_tostring(L, 2));
