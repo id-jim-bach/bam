@@ -299,7 +299,9 @@
 	#define D_TYPE_HACK
 
 #ifdef D_TYPE_HACK
+#ifndef __USE_BSD
 	#define __USE_BSD
+#endif
 #endif
 
 	#include <dirent.h>
