@@ -506,7 +506,7 @@ AddTool(function (settings)
 		<tr><td>^Output^</td><td>
 		Function that should transform the input path
 		into the output path. The appending of the extension is done
-		automaticly.
+		automatically.
 		
 		{{{{
 			settings.link.Output = function(settings, input)

@@ -1278,11 +1278,11 @@ int lf_add_dependency_cpp_set_paths(lua_State *L)
 	struct CONTEXT *context;
 	struct STRINGLIST * cur;
 	int n = lua_gettop(L);
-	
+
 	if(n != 1)
 		luaL_error(L, "add_dependency_cpp_set_paths: incorrect number of arguments");
 	luaL_checktype(L, 1, LUA_TTABLE);
-	
+
 	context = context_get_pointer(L);
 	current_includepaths = NULL;
 	build_stringlist(L, context->deferredheap, &current_includepaths, 1);
@@ -1307,11 +1307,11 @@ int lf_add_dependency_cpp(lua_State *L)
 	int n = lua_gettop(L);
 	int hashindex;
 	int i;
-	
+
 	if(n != 1)
 		luaL_error(L, "add_dependency_cpp: incorrect number of arguments");
 	luaL_checkstring(L,1);
-	
+
 	context = context_get_pointer(L);
 	name = lua_tostring(L, 1);
 	node = node_find(context->graph, name);
@@ -1371,7 +1371,7 @@ int lf_add_dependency_search(lua_State *L)
 	struct CONTEXT *context;
 	struct DEFERRED *deferred;
 	struct DEPPLAIN *plain;
-	
+
 	if(lua_gettop(L) != 3)
 		luaL_error(L, "add_dep_search: expected 3 arguments");
 	luaL_checktype(L, 1, LUA_TSTRING);
@@ -1386,24 +1386,24 @@ int lf_add_dependency_search(lua_State *L)
 		luaL_error(L, "add_dep_search: expected table as second argument");
 	if(lua_type(L,3) != LUA_TTABLE)
 		luaL_error(L, "add_dep_search: expected table as third argument");
-		
+
 	deferred = (struct DEFERRED *)mem_allocate(context->deferredheap, sizeof(struct DEFERRED));
 	plain = (struct DEPPLAIN *)mem_allocate(context->deferredheap, sizeof(struct DEPPLAIN));
-	
+
 	deferred->node = node;
 	deferred->user = plain;
 	deferred->run = dep_plain;
 	deferred->next = context->firstdeferred_search;
 	context->firstdeferred_search = deferred;
-		
+
 	/* allocate the lookup */
 	plain->firstpath = NULL;
 	plain->firstdep = NULL;
-	
+
 	/* build the string lists */
 	build_stringlist(L, context->deferredheap, &plain->firstpath, 2);
 	build_stringlist(L, context->deferredheap, &plain->firstdep, 3);
-	
+
 	return 0;
 }
 
