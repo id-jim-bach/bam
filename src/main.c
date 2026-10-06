@@ -480,6 +480,9 @@ int register_lua_globals(struct lua_State *lua, const char* script_directory, co
 		lua_setglobalstring(lua, CONTEXT_LUA_WORKPATH, cwd);
 	}
 
+	lua_pushinteger(lua, session.threads);
+	lua_setglobal(lua, CONTEXT_LUA_THREAD_COUNT);
+
 	/* set version, family, platform, arch, verbocity */
 	lua_setglobalstring(lua, "_bam_version", BAM_VERSION_STRING);
 	lua_setglobalstring(lua, "_bam_version_complete", BAM_VERSION_STRING_COMPLETE);

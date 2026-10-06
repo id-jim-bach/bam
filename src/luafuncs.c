@@ -23,6 +23,7 @@ const char *CONTEXT_LUA_SCRIPTARGS_TABLE = "_bam_scriptargs";
 const char *CONTEXT_LUA_TARGETS_TABLE = "_bam_targets";
 const char *CONTEXT_LUA_PATH = "_bam_path";
 const char *CONTEXT_LUA_WORKPATH = "_bam_workpath";
+const char *CONTEXT_LUA_THREAD_COUNT = "_bam_thread_count";
 
 /* context helper functions */
 static struct CONTEXT *context_get_pointer(lua_State *L)

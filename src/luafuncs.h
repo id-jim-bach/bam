@@ -4,6 +4,7 @@ extern const char *CONTEXT_LUA_SCRIPTARGS_TABLE;
 extern const char *CONTEXT_LUA_TARGETS_TABLE;
 extern const char *CONTEXT_LUA_PATH;
 extern const char *CONTEXT_LUA_WORKPATH;
+extern const char *CONTEXT_LUA_THREAD_COUNT;
 
 /* jobs and deps */
 int lf_add_job(struct lua_State *L);
