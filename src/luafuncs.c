@@ -1302,18 +1302,31 @@ int lf_add_dependency_cpp(lua_State *L)
 	struct DEFERRED *deferred;
 	struct NODE * node;
 	struct DEFERRED_CSCAN *scan;
+	const char *name;
+	time_t timestamp;
 	int n = lua_gettop(L);
 	int hashindex;
+	int i;
 	
 	if(n != 1)
 		luaL_error(L, "add_dependency_cpp: incorrect number of arguments");
 	luaL_checkstring(L,1);
 	
 	context = context_get_pointer(L);
-	node = node_find(context->graph, lua_tostring(L,1));
+	name = lua_tostring(L, 1);
+	node = node_find(context->graph, name);
 
 	if(!node)
-		luaL_error(L, "add_dependency_cpp: couldn't find node with name '%s'", lua_tostring(L,1));
+	{
+		/* Check if a file already exists (same as node_findfile). */
+		timestamp = file_timestamp(name);
+
+		if(!timestamp || !file_isregular(name))
+			luaL_error(L, "add_dependency_cpp: couldn't find node or file with name '%s'", name);
+
+		i = node_create(&node, context->graph, name, NULL, timestamp);
+		handle_node_errors(L, i, 1);
+	}
 
 
 	deferred = (struct DEFERRED *)mem_allocate(context->deferredheap, sizeof(struct DEFERRED));
