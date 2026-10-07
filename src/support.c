@@ -635,7 +635,7 @@ int run_command(const char *cmd, const char *filter)
 	buf[len+2] = 0;
 	
 	/* open the command line */
-	fp = _popen(buf, "r");
+	fp = _popen(buf, "rt");
 
 	if(!fp)
 		return -1;
