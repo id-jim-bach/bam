@@ -353,9 +353,13 @@ end)
 @END]]--
 if family == "windows" then
 	function CopyFile(dst, src)
+		local src_esc = "\"" .. str_replace(src, "/", "\\") .. "\""
+		local dst_esc = "\"" .. str_replace(dst, "/", "\\") .. "\""
+		local copy_cmd = "copy /b " .. src_esc .. " " .. dst_esc
+		local del_cmd = "del /f " .. dst_esc
 		AddJob(dst,
 			"copy " .. src .. " -> " .. dst,
-			"copy /b \"" .. str_replace(src, "/", "\\") .. "\" \"" .. str_replace(dst, "/", "\\") .. "\" >nul 2>&1",
+			copy_cmd .. " >nul 2>&1 || ( echo Failed to copy. Trying again. && ( " .. del_cmd .. " && " .. copy_cmd .. " ) >nul )",
 			src)
 		return dst
 	end
