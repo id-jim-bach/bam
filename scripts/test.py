@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-import os, sys, shutil, subprocess
+import os, sys, shutil, stat, subprocess
 
 extra_bam_flags = ""
 src_path = "tests"
@@ -215,8 +215,13 @@ def unittests():
 
 	os.chdir(olddir)
 
+def remove_readonly(func, path, _):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
 # clean
-shutil.rmtree(output_path, True)
+if os.path.isdir(output_path):
+    shutil.rmtree(output_path, onerror=remove_readonly)
 # copy tree
 copytree("tests", output_path)
 os.mkdir(os.path.join(output_path, "unit"))
