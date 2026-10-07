@@ -65,6 +65,7 @@ static int option_force = 0;
 static int option_clean = 0;
 static int option_no_cache = 0;
 static int option_no_scripttimestamp = 0;
+static int option_no_statthread = 0;
 static int option_dry = 0;
 static int option_dependent = 0;
 static int option_abort_on_error = 0;
@@ -231,6 +232,13 @@ static struct OPTION options[] = {
 		Enabling this causes the output not to be rebuilt when the build script changes.
 	@END*/
 	{OF_PRINT, 0, &option_no_scripttimestamp, "-g", "ignore script timestamp"},
+
+	/*@OPTION No separate thread for statting files ( --no-statthread )
+		Reads file timestamps synchronously during script evaluation instead of
+		using a separate stat thread. Works with every compiled stat-thread mode.
+		The -j option controls build jobs, not the stat thread.
+	@END*/
+	{OF_PRINT, 0, &option_no_statthread, "--no-statthread", "don't use a separate stat thread"},
 
 	/*@OPTION Help ( -h, --help )
 		Prints out a short reference of the command line options and quits
@@ -625,23 +633,28 @@ static int bam_setup(struct CONTEXT *context, const char *scriptfile, const char
 	file_createdir(".bam");
 
 	/* start the background stat thread */
-	node_graph_start_statthread(context->graph);
+	if (!option_no_statthread)
+		node_graph_start_statthread(context->graph);
 
 	/* call the code chunk */
 	event_begin(0, "script run", NULL);
 	if(lua_pcall(context->lua, 0, LUA_MULTRET, -2) != 0)
 	{
-		node_graph_end_statthread(context->graph);
+		if(!option_no_statthread)
+			node_graph_end_statthread(context->graph);
 		if(!session.lua_backtrace)
 			printf("%s: script error (-t for more detail)\n", session.name);
 		return -1;
 	}
 	event_end(0, "script run", NULL);
 
-	/* stop the background stat thread */
-	event_begin(0, "stat", NULL);
-	node_graph_end_statthread(context->graph);
-	event_end(0, "stat", NULL);
+	if(!option_no_statthread)
+	{
+		/* stop the background stat thread */
+		event_begin(0, "stat", NULL);
+		node_graph_end_statthread(context->graph);
+		event_end(0, "stat", NULL);
+	}
 	
 	/* run deferred functions */
 	event_begin(0, "deferred cpp dependencies", NULL);
@@ -973,6 +986,7 @@ static void print_help(int mask)
 	}
 	printf("\n");
 	printf("bam version " BAM_VERSION_STRING_COMPLETE " using " LUA_RELEASE "\n");
+	printf("stat thread mode: " BAM_STAT_THREAD_NAME "\n");
 	printf("\n");
 
 }

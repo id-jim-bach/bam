@@ -55,6 +55,43 @@ by running:
 
 {{{{sh make_beos.sh}}}}
 
+@GROUP File Stat Thread Modes @END
+
+Bam normally reads file timestamps on a background worker while evaluating
+the build script. Compile exactly one implementation into Bam by defining
+BAM_STAT_THREAD_MODE:
+
+{{{{0 = locking (default): critical section/event on Windows, mutex/condition variable on POSIX
+1 = legacy: historical volatile/barrier queue with polling/yield
+2 = atomic: experimental lockless single-producer/single-consumer queue}}}}
+
+The legacy mode uses volatile pointers and barriers that are not portable
+race-free synchronization; it is used for comparison.
+
+The atomic mode uses release publication and acquire consumption, including
+completion after the last append. Nodes remain alive until the worker joins.
+Only the stat queue is lockless; other parts of Bam still use locks.
+
+Atomic mode requires always-lock-free pointer and long operations with
+GCC/Clang __atomic builtins, or MSVC Interlocked intrinsics on x86, x64 or
+ARM64. Interlocked provides stronger ordering than acquire/release.
+Unsupported atomic targets and invalid mode values fail at compile time;
+there is no lock-backed fallback or additional atomic library dependency.
+Other modes do not require these atomic facilities.
+
+From a VS 2022 x64 developer shell, for example:
+
+{{{{make_win64_msvc.bat /DBAM_STAT_THREAD_MODE=2}}}}
+
+The Visual Studio NMake project exposes the BamStatThreadMode MSBuild
+property (default 0).
+
+The --help footer reports "stat thread mode: locking", "legacy", or "atomic".
+The runtime option --no-statthread bypasses the worker and reads timestamps
+synchronously in every compiled mode. It does not select a different queue
+implementation. The -j option controls build-job parallelism, independently
+of this worker.
+
 @GROUP Running the Test Suite @END
 
 The Windows batch files have isolated exit-code regression tests. Run
@@ -77,3 +114,14 @@ can run the test suite by typing this:
 
 It will either print out that all tests where successfull or
 what tests it didn't pass.
+
+Focused stat-thread tests run with:
+
+{{{{python scripts/test.py stat_thread}}}}
+
+The stat_thread selector includes threaded/synchronous graph comparisons,
+incremental rebuild and error-shutdown checks, and a C harness for exact
+timestamp, dirty-flag, duplicate and explicit-timestamp assertions. It
+compiles the harness with cl in the Windows developer environment or gcc
+on POSIX, selecting the mode reported by the Bam executable. Subprocess
+timeouts detect hangs. Run the full suite for all three modes.

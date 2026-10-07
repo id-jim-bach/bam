@@ -26,6 +26,14 @@ public class FakeBuildTool {
                 if (arg.EndsWith("txt2c.c")) stage = "helper";
         }
         File.AppendAllText(Environment.GetEnvironmentVariable("TEST_TRACE"), stage + "\n");
+        string flag = Environment.GetEnvironmentVariable("TEST_MODE_FLAG");
+        int flagIndex = Array.IndexOf(args, flag);
+        int linkIndex = Array.IndexOf(args, "/link");
+        if ((stage == "build" && (flagIndex < 0 || (linkIndex >= 0 && flagIndex > linkIndex))) ||
+            (stage != "build" && flagIndex >= 0)) {
+            Console.Error.WriteLine("Incorrect mode flag forwarding in " + stage);
+            return 14;
+        }
         if (Environment.GetEnvironmentVariable("TEST_FAIL_STAGE") == stage) {
             Console.Error.WriteLine("Simulated " + stage + " failure");
             return stage == "helper" ? 11 : stage == "generate" ? 12 : 13;
@@ -72,6 +80,7 @@ try {
             }
 
             $trace = Join-Path $root 'trace.txt'
+            $modeFlag = if ($script -like '*msvc*') { '/DBAM_STAT_THREAD_MODE=2' } else { '-DBAM_STAT_THREAD_MODE=2' }
             $wrapper = Join-Path $caller 'run.bat'
             $commands = @(
                 '@echo off',
@@ -82,6 +91,7 @@ try {
                 "set `"VCINSTALLDIR=$root`"",
                 "set `"ProgramFiles(x86)=$root`"",
                 "set `"TEST_TRACE=$trace`"",
+                "set `"TEST_MODE_FLAG=$modeFlag`"",
                 "set `"TEST_FAIL_STAGE=$case`""
             )
             foreach ($version in @(140, 120, 110, 100, 90, 80)) {
@@ -99,7 +109,7 @@ try {
                 $commands += "set `"VS140COMNTOOLS=$commonTools\`""
             }
             $commands += @(
-                "call `"$target`"",
+                "call `"$target`" $modeFlag",
                 'set "result=%errorlevel%"',
                 'if not "%CD%"=="%original_dir%" exit /b 99',
                 'if not "%build_result%"=="sentinel" exit /b 98',

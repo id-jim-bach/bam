@@ -12,6 +12,53 @@
 #include "support.h"
 #include "mem.h"
 
+static void thread_error(const char *operation, long code)
+{
+	fprintf(stderr, "%s: error: %s failed (%ld)\n", session.name, operation, code);
+	exit(1);
+}
+
+#if BAM_STAT_THREAD_MODE == BAM_STAT_THREAD_ATOMIC
+void atomic_node_init(struct ATOMIC_NODE *ptr) { ptr->value = NULL; }
+void atomic_flag_init(struct ATOMIC_FLAG *ptr) { ptr->value = 0; }
+
+#if defined(__GNUC__) || defined(__clang__)
+struct NODE *atomic_node_load(struct ATOMIC_NODE *ptr)
+{
+	return __atomic_load_n(&ptr->value, __ATOMIC_ACQUIRE);
+}
+void atomic_node_store(struct ATOMIC_NODE *ptr, struct NODE *value)
+{
+	__atomic_store_n(&ptr->value, value, __ATOMIC_RELEASE);
+}
+int atomic_flag_load(struct ATOMIC_FLAG *ptr)
+{
+	return __atomic_load_n(&ptr->value, __ATOMIC_ACQUIRE) != 0;
+}
+void atomic_flag_set(struct ATOMIC_FLAG *ptr)
+{
+	__atomic_store_n(&ptr->value, 1, __ATOMIC_RELEASE);
+}
+#else
+struct NODE *atomic_node_load(struct ATOMIC_NODE *ptr)
+{
+	return (struct NODE *)_InterlockedCompareExchangePointer((void * volatile *)&ptr->value, NULL, NULL);
+}
+void atomic_node_store(struct ATOMIC_NODE *ptr, struct NODE *value)
+{
+	_InterlockedExchangePointer((void * volatile *)&ptr->value, value);
+}
+int atomic_flag_load(struct ATOMIC_FLAG *ptr)
+{
+	return _InterlockedCompareExchange(&ptr->value, 0, 0) != 0;
+}
+void atomic_flag_set(struct ATOMIC_FLAG *ptr)
+{
+	_InterlockedExchange(&ptr->value, 1);
+}
+#endif
+#endif
+
 #ifdef BAM_FAMILY_BEOS
     #include <sched.h>
 #endif
@@ -122,6 +169,10 @@
 	static HANDLE jobhandle;
 #endif
 
+#if BAM_STAT_THREAD_MODE == BAM_STAT_THREAD_LOCKING
+	static CRITICAL_SECTION signal_lock;
+	static HANDLE signal_event;
+#endif
 	void platform_init()
 	{
 		char buffer[512] = {0};
@@ -229,6 +280,13 @@
 		}
 
 		InitializeCriticalSection(&criticalsection);
+#if BAM_STAT_THREAD_MODE == BAM_STAT_THREAD_LOCKING
+		/* Create an unsignaled auto reset event */
+		InitializeCriticalSection(&signal_lock);
+		signal_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+		if(!signal_event)
+			thread_error("CreateEvent", GetLastError());
+#endif
 	}
 	
 	void platform_shutdown()
@@ -240,6 +298,11 @@
 		if(singleton_mutex)
 			ReleaseMutex(singleton_mutex);
 		CloseHandle(singleton_mutex);
+#if BAM_STAT_THREAD_MODE == BAM_STAT_THREAD_LOCKING
+		if(!CloseHandle(signal_event))
+			thread_error("CloseHandle(stat event)", GetLastError());
+		DeleteCriticalSection(&signal_lock);
+#endif
 		DeleteCriticalSection(&criticalsection);
 	}
 
@@ -248,25 +311,53 @@
 
 	void *threads_create(void (*threadfunc)(void *), void *u)
 	{
-		return CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)threadfunc, u, 0, NULL);
+		HANDLE thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)threadfunc, u, 0, NULL);
+		if(!thread)
+			thread_error("CreateThread", GetLastError());
+		return thread;
 	}
 
 	void threads_join(void *thread)
 	{
-		WaitForSingleObject((HANDLE)thread, INFINITE);
+		if(WaitForSingleObject((HANDLE)thread, INFINITE) != WAIT_OBJECT_0)
+			thread_error("WaitForSingleObject(thread)", GetLastError());
+		if(!CloseHandle((HANDLE)thread))
+			thread_error("CloseHandle(thread)", GetLastError());
 	}
-
-	void threads_yield()
-	{
-		Sleep(1);
-	}
-
 
 	void threads_sleep(int milliseconds)
 	{
 		Sleep(milliseconds);
 	}
-	
+
+#if BAM_STAT_THREAD_MODE == BAM_STAT_THREAD_LOCKING
+	void threads_signal_work(void (*change_state)(void *user), void *user)
+	{
+		EnterCriticalSection(&signal_lock);
+		change_state(user);
+		if(!SetEvent(signal_event))
+			thread_error("SetEvent", GetLastError());
+		LeaveCriticalSection(&signal_lock);
+	}
+
+	void threads_signal_wait(int (*is_ready)(void *user), void *user)
+	{
+		DWORD wait_result;
+		EnterCriticalSection(&signal_lock);
+		while(!is_ready(user))
+		{
+			LeaveCriticalSection(&signal_lock);
+			wait_result = WaitForSingleObject(signal_event, INFINITE);
+			EnterCriticalSection(&signal_lock);
+			if(WAIT_OBJECT_0 != wait_result)
+				thread_error("WaitForSingleObject(stat event)", GetLastError());
+		}
+		LeaveCriticalSection(&signal_lock);
+	}
+#else
+	void threads_yield() { Sleep(1); }
+#endif
+
 	int threads_corecount()
 	{
 		SYSTEM_INFO sysinfo;
@@ -312,6 +403,8 @@
 	#include <sys/wait.h> 
 	#include <utime.h>
 	#include <pthread.h>
+	#include <sched.h>
+	#include <signal.h>
 
 	#include <sys/time.h>
 
@@ -406,24 +499,52 @@
 	void *threads_create(void (*threadfunc)(void *), void *u)
 	{
 		pthread_t id;
-		pthread_create(&id, NULL, (void *(*)(void*))threadfunc, u);
+		int error = pthread_create(&id, NULL, (void *(*)(void*))threadfunc, u);
+		if(error)
+			thread_error("pthread_create", error);
 		return (void*)id;
 	}
 
 	void threads_join(void *thread)
 	{
-		pthread_join((pthread_t)thread, NULL);
-	}
-
-	void threads_yield()
-	{
-		sched_yield();
+		int error = pthread_join((pthread_t)thread, NULL);
+		if(error)
+			thread_error("pthread_join", error);
 	}
 
 	void threads_sleep(int milliseconds)
 	{
 		usleep(milliseconds*1000);
 	}
+
+#if BAM_STAT_THREAD_MODE == BAM_STAT_THREAD_LOCKING
+	static pthread_mutex_t signal_mutex = PTHREAD_MUTEX_INITIALIZER;
+	static pthread_cond_t signal_cond = PTHREAD_COND_INITIALIZER;
+
+	static void signal_check(const char *operation, int error)
+	{
+		if(error)
+			thread_error(operation, error);
+	}
+
+	void threads_signal_work(void (*change_state)(void *user), void *user)
+	{
+		signal_check("pthread_mutex_lock(stat)", pthread_mutex_lock(&signal_mutex));
+		change_state(user);
+		signal_check("pthread_cond_signal", pthread_cond_signal(&signal_cond));
+		signal_check("pthread_mutex_unlock(stat)", pthread_mutex_unlock(&signal_mutex));
+	}
+
+	void threads_signal_wait(int (*is_ready)(void *user), void *user)
+	{
+		signal_check("pthread_mutex_lock(stat)", pthread_mutex_lock(&signal_mutex));
+		while(!is_ready(user))
+			signal_check("pthread_cond_wait", pthread_cond_wait(&signal_cond,&signal_mutex));
+		signal_check("pthread_mutex_unlock(stat)", pthread_mutex_unlock(&signal_mutex));
+	}
+#else
+	void threads_yield() { sched_yield(); }
+#endif
 
 	int threads_corecount()
 	{

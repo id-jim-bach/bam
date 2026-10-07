@@ -255,6 +255,11 @@ test("multipleoutput")
 test("multipleoutput_deps")
 test("missingoutput", "", 1)
 
+if len(tests) == 0 or "stat_thread" in tests:
+	import test_stat_thread
+	if not test_stat_thread.run():
+		failed_tests += ["stat_thread"]
+
 if len(failed_tests):
 	print("FAILED TESTS:")
 	for t in failed_tests:

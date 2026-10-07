@@ -18,11 +18,20 @@ if [ "$1" = "--version" ]; then
 	exit 0
 fi
 stage=build
+mode_flag=
 for arg do
 	if [ "$arg" = "src/tools/txt2c.c" ]; then
 		stage=helper
 	fi
+	if [ "$arg" = "-DBAM_STAT_THREAD_MODE=2" ]; then
+		mode_flag=yes
+	fi
 done
+if { [ "$stage" = build ] && [ "$mode_flag" != yes ]; } ||
+	{ [ "$stage" = helper ] && [ "$mode_flag" = yes ]; }; then
+	echo "Incorrect mode flag forwarding in $stage" >&2
+	exit 15
+fi
 echo "$stage" >> "$TEST_TRACE"
 if [ "$TEST_CASE" = "$stage" ]; then
 	echo "Simulated $stage failure" >&2
@@ -90,7 +99,7 @@ EOF
 		fi
 		PATH="$temp/bin:$PATH"
 		export TEST_CASE TEST_TRACE CC PATH
-		exec sh ./make_unix.sh
+		exec sh ./make_unix.sh -DBAM_STAT_THREAD_MODE=2
 	) > "$root/output" 2>&1 || code=$?
 
 	actual_trace=''
