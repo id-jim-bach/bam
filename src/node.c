@@ -417,12 +417,12 @@ static struct NODE *node_add_constraint (struct NODELINK **first, struct NODE *n
 
 struct NODE *node_add_constraint_shared (struct NODE *node, struct NODE *contraint)
 {
-	return node_add_constraint (&node->constraint_shared, node, contraint);
+	return node_add_constraint (&node->job->constraint_shared, node, contraint);
 }
 
 struct NODE *node_add_constraint_exclusive (struct NODE *node, struct NODE *contraint)
 {
-	return node_add_constraint (&node->constraint_exclusive, node, contraint);
+	return node_add_constraint (&node->job->constraint_exclusive, node, contraint);
 }
 
 void node_cached(struct NODE *node)
@@ -783,12 +783,12 @@ static void print_node(struct NODE *basenode, const char *label, int html, int p
 		printf("%08x %s    PARENT %s\n", (unsigned)(*node)->timestamp, dirtyflags_str((*node)->dirty), decorate_link((*node)->id, (*node)->filename, "n", html));
 	free(nodelist);
 
-	nodelist = sorted_nodelinklist(basenode->constraint_shared);
+	nodelist = sorted_nodelinklist(basenode->job->constraint_shared);
 	for(node = nodelist; *node; node++)
 		printf("%08x %s    SHARED %s\n", (unsigned)(*node)->timestamp, dirtyflags_str((*node)->dirty), decorate_link((*node)->id, (*node)->filename, "n", html));
 	free(nodelist);
 
-	nodelist = sorted_nodelinklist(basenode->constraint_exclusive);
+	nodelist = sorted_nodelinklist(basenode->job->constraint_exclusive);
 	for(node = nodelist; *node; node++)
 		printf("%08x %s    EXCLUS %s\n", (unsigned)(*node)->timestamp, dirtyflags_str((*node)->dirty), decorate_link((*node)->id, (*node)->filename, "n", html));
 	free(nodelist);

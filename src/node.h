@@ -99,9 +99,6 @@ struct NODE
 
 	struct NODE * volatile nextstat; /* next node to stat, written by main-thread, read by stat-thread*/
 
-	struct NODELINK *constraint_exclusive; /* list of exclusive constraints */
-	struct NODELINK *constraint_shared; /* list of shared constraints */
-	
 	struct JOB *job; /* job that produces this node */
 	const char *filename; /* this contains the filename with the FULLPATH */
 
