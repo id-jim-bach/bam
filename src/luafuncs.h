@@ -69,6 +69,6 @@ int lf_istable(struct lua_State *L);
 int lf_isstring(struct lua_State *L);
 int lf_loadfile(struct lua_State *L);
 int lf_errorfunc(struct lua_State *L);
+void lua_report_error(struct lua_State *L);
 int lf_panicfunc(struct lua_State *L);
 int lf_sleep(struct lua_State *L);
-

@@ -365,6 +365,15 @@ static void *lua_alloctor_malloc(void *ud, void *ptr, size_t osize, size_t nsize
 }
 
 
+static int lua_call_with_report(lua_State *lua, int results)
+{
+	int status = lua_pcall(lua, 0, results, -2);
+	/* Runtime errors have already been printed by the message handler. */
+	if(status != LUA_OK && status != LUA_ERRRUN)
+		lua_report_error(lua);
+	return status;
+}
+
 /* *** */
 int register_lua_globals(struct lua_State *lua, const char* script_directory, const char* filename)
 {
@@ -514,6 +523,7 @@ int register_lua_globals(struct lua_State *lua, const char* script_directory, co
 		
 		for(f = 0; internal_files[f].filename; f++)
 		{
+			int stack_top = lua_gettop(lua);
 			p = internal_files[f].content;
 			
 			if(session.verbose)
@@ -525,7 +535,7 @@ int register_lua_globals(struct lua_State *lua, const char* script_directory, co
 			ret = lua_load(lua, internal_base_reader, (void *)&p, internal_files[f].filename, NULL);
 			if(ret != 0)
 			{
-				lf_errorfunc(lua);
+				lua_report_error(lua);
 				
 				if(ret == LUA_ERRSYNTAX)
 				{
@@ -537,8 +547,9 @@ int register_lua_globals(struct lua_State *lua, const char* script_directory, co
 					
 				error = 1;
 			}
-			else if(lua_pcall(lua, 0, LUA_MULTRET, -2) != 0)
+			else if(lua_call_with_report(lua, LUA_MULTRET) != 0)
 				error = 1;
+			lua_settop(lua, stack_top);
 		}
 	}
 	
@@ -558,6 +569,7 @@ static int run_deferred_functions(struct CONTEXT *context, struct DEFERRED *cur)
 
 static int bam_setup(struct CONTEXT *context, const char *scriptfile, const char **targets, int num_targets)
 {
+	int stack_top = lua_gettop(context->lua);
 	/* */	
 	if(session.verbose)
 		printf("%s: setup started\n", session.name);
@@ -611,21 +623,11 @@ static int bam_setup(struct CONTEXT *context, const char *scriptfile, const char
 	event_begin(0, "script load", NULL);
 	/* push error function to stack and load the script */
 	lua_getglobal(context->lua, "errorfunc");
-	switch(luaL_loadfile(context->lua, scriptfile))
+	if(luaL_loadfile(context->lua, scriptfile) != LUA_OK)
 	{
-		case 0: break;
-		case LUA_ERRSYNTAX:
-			lf_errorfunc(context->lua);
-			return -1;
-		case LUA_ERRMEM:
-			printf("%s: memory allocation error\n", session.name);
-			return -1;
-		case LUA_ERRFILE:
-			printf("%s: error opening '%s'\n", session.name, scriptfile);
-			return -1;
-		default:
-			printf("%s: unknown error\n", session.name);
-			return -1;
+		lua_report_error(context->lua);
+		lua_settop(context->lua, stack_top);
+		return -1;
 	}
 	event_end(0, "script load", NULL);
 
@@ -638,14 +640,16 @@ static int bam_setup(struct CONTEXT *context, const char *scriptfile, const char
 
 	/* call the code chunk */
 	event_begin(0, "script run", NULL);
-	if(lua_pcall(context->lua, 0, LUA_MULTRET, -2) != 0)
+	if(lua_call_with_report(context->lua, LUA_MULTRET) != 0)
 	{
+		lua_settop(context->lua, stack_top);
 		if(!option_no_statthread)
 			node_graph_end_statthread(context->graph);
 		if(!session.lua_backtrace)
 			printf("%s: script error (-t for more detail)\n", session.name);
 		return -1;
 	}
+	lua_settop(context->lua, stack_top);
 	event_end(0, "script run", NULL);
 
 	if(!option_no_statthread)
@@ -1232,27 +1236,18 @@ int main(int argc, char **argv)
 		}
 
 		lua_getglobal(lua, "errorfunc");
-		switch(luaL_loadfile(lua, option_lua_execute))
+		if(luaL_loadfile(lua, option_lua_execute) != LUA_OK)
 		{
-			case 0: break;
-			case LUA_ERRSYNTAX:
-					lf_errorfunc(lua);
-					return 1;
-			case LUA_ERRMEM: 
-					printf("%s: memory allocation error\n", session.name);
-					return 1;
-			case LUA_ERRFILE:
-					printf("%s: error opening '%s'\n", session.name, option_lua_execute);
-					return 1;
-			default:
-					printf("%s: unknown error\n", session.name);
-					return 1;
+			lua_report_error(lua);
+			lua_close(lua);
+			return 1;
 		}
 
 		/* call the code chunk */	
-		if(lua_pcall(lua, 0, LUA_MULTRET, -2) != 0)
+		if(lua_call_with_report(lua, LUA_MULTRET) != 0)
 		{
 			printf("%s: script error (-t for more detail)\n", session.name);
+			lua_close(lua);
 			return 1;
 		}
 
