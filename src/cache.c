@@ -844,12 +844,8 @@ int outputcache_save(const char *filename, struct OUTPUTCACHE *oldcache, struct 
 	struct CACHEINFO_OUTPUT * final;
 	unsigned finalcount;
 	char tmpfilename[] = ".bam/outputcacheXXXXXXXX";
+	time_t current_stamp;
 
-	time_t current_stamp = file_timestamp(filename);
-
-	if(cache_timestamp != current_stamp)
-		printf("%s: warning: cache file '%s' has been changed since cache load, will be overwritten (%08x,%08x), is bam called from bam?\n", session.name, filename, (unsigned)cache_timestamp, (unsigned)current_stamp);
-	
 	fp = io_open_write_tmp(tmpfilename);
 	if(!io_valid(fp))
 	{
@@ -923,6 +919,14 @@ int outputcache_save(const char *filename, struct OUTPUTCACHE *oldcache, struct 
 	/* close up and return */
 	free(output);
 	io_close(fp);
+
+	current_stamp = file_timestamp(filename);
+	if(cache_timestamp != current_stamp)
+	{
+		printf("%s: warning: cache file '%s' has been changed since starting (%08x,%08x); aborting.\n", session.name, filename, (unsigned)cache_timestamp, (unsigned)current_stamp);
+		io_unlink(tmpfilename);
+		return -1;
+	}
 
 	/* put the new file into place */
 #ifdef BAM_FAMILY_WINDOWS
