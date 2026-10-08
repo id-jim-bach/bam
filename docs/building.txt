@@ -38,6 +38,15 @@ environment setup in a console and then run this:
 An optimized version of Bam will be built and the exe can be located in
 the base directory of Bam.
 
+The Windows build batch files return zero on success and a nonzero exit
+code if environment setup, compilation, linking, or Lua header generation
+fails. Build steps stop at the first failure, and cleanup preserves the
+failing command's exit code. When invoking a build from another batch
+file, use CALL and check ERRORLEVEL immediately:
+
+{{{{call make_win64_msvc.bat
+if errorlevel 1 exit /b %errorlevel%}}}}
+
 @GROUP BeOS and Haiku @END
 
 Building Bam works the same way as on Unix-like systems but
