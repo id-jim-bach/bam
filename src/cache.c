@@ -123,9 +123,16 @@ static void cache_setup_header(const char type[4])
 #endif
 
 #ifdef BAM_FAMILY_WINDOWS
+	/* windows code */
+	#define WIN32_LEAN_AND_MEAN
+	#define VC_EXTRALEAN
+	#include <windows.h> /* MoveFileEx */
+
 	#define io_unlink(filename) remove(filename)
+	#define io_rename(oldname, newname) (MoveFileEx(oldname, newname, MOVEFILE_REPLACE_EXISTING) != 0 ? 0 : 1)
 #else
 	#define io_unlink(filename) unlink(filename)
+	#define io_rename(oldname, newname) rename(oldname, newname)
 #endif
 
 static int io_read_cachefile(const char *filename, const char *type, void **buffer, unsigned long *buffersize)
@@ -389,10 +396,7 @@ int scancache_save(const char *filename, struct GRAPH *graph)
 	io_close(info.fp);
 
 	/* place the file where it should be now that everything was written correctly */
-#ifdef BAM_FAMILY_WINDOWS
-	remove(filename);
-#endif
-	if(rename(tmpfilename, filename) != 0) 
+	if(io_rename(tmpfilename, filename) != 0)
 	{
 		/* error occured */
 		printf( "%s: warning: error writing scan cache file '%s': %s\n", session.name, filename, strerror(errno) );
@@ -653,10 +657,7 @@ int depcache_save(const char *filename, struct GRAPH *graph)
 	io_close(info.fp);
 
 	/* place the file where it should be now that everything was written correctly */
-#ifdef BAM_FAMILY_WINDOWS
-	remove(filename);
-#endif
-	if(rename(tmpfilename, filename) != 0) 
+	if(io_rename(tmpfilename, filename) != 0)
 	{
 		/* error occured */
 		printf( "%s: warning: error writing cache file '%s'\n", session.name, filename );
@@ -929,10 +930,7 @@ int outputcache_save(const char *filename, struct OUTPUTCACHE *oldcache, struct 
 	}
 
 	/* put the new file into place */
-#ifdef BAM_FAMILY_WINDOWS
-	remove( filename );
-#endif
-	if(rename(tmpfilename, filename) != 0) 
+	if(io_rename(tmpfilename, filename) != 0)
 	{
 		/* error occured */
 		printf( "%s: warning: error writing cache file '%s'\n", session.name, filename );
