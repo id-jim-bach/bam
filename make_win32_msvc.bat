@@ -33,7 +33,6 @@ if exist "%VCINSTALLDIR%" (
 
 if not defined VSPATH (
 	echo You need Microsoft Visual Studio 8, 9, 10, 11, 12, 13 or 15 installed
-	pause
 	exit
 )
 
@@ -48,7 +47,6 @@ if exist "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" (
 )
 
 echo Unable to set up the environment
-pause
 exit
 
 :compile
