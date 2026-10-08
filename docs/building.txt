@@ -62,6 +62,11 @@ them with Windows PowerShell; no C/C++ toolchain is needed:
 
 {{{{powershell.exe -NoProfile -File scripts\test_build_scripts.ps1}}}}
 
+The make_unix.sh file has isolated exit-code regression tests without
+compiling bam.  Run them using:
+
+{{{{sh scripts/test_make_unix.sh}}}}
+
 Bam comes with a test suite to verify that Bam is working like
 it should. The suite requires <a href="http://www.python.com">Python</a>
 to be installed. This test suite is used during the development
