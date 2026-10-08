@@ -67,6 +67,7 @@ static void cache_setup_header(const char type[4])
 	#define IO_HANDLE int
 	#define io_open_read(filename) open(filename, O_RDONLY)
 	#define io_open_write(filename) open(filename, O_WRONLY|O_CREAT|O_TRUNC, 0666)
+	#define io_open_write_tmp(pattern) mkstemp(pattern)
 	#define io_valid(f) ((f) != -1)
 	#define io_close(f) close(f)
 	#define io_read(f, data, size) read(f, data, size)
@@ -86,14 +87,29 @@ static void cache_setup_header(const char type[4])
 	
 #else
 	#include <stdio.h> /* FILE, f* */
+	#ifdef BAM_FAMILY_WINDOWS
+		#include <io.h> /* _mktemp */
+		#define io_mktemp(filename) _mktemp(filename)
+	#else
+		#define io_mktemp(filename) mktemp(filename)
+	#endif
 
 	#define IO_HANDLE FILE*
 	#define io_open_read(filename) fopen(filename, "rb")
 	#define io_open_write(filename) fopen(filename, "wb")
+
 	#define io_valid(f) (f)
 	#define io_close(f) fclose(f)
 	#define io_read(f, data, size) fread(data, 1, size, f)
 	#define io_write(f, data, size) fwrite(data, 1, size, f)
+
+	FILE * io_open_write_tmp(char *pattern)
+	{
+		if(io_mktemp(pattern) == NULL)
+			return NULL;
+
+		return io_open_write(pattern);
+	}
 
 	size_t io_size(IO_HANDLE f)
 	{
@@ -345,13 +361,12 @@ static int scancache_write_nodes(struct SCANCACHE_WRITEINFO *info)
 int scancache_save(const char *filename, struct GRAPH *graph)
 {
 	struct SCANCACHE_WRITEINFO info;
-	char tmpfilename[1024];
+	char tmpfilename[] = ".bam/scancacheXXXXXXXX";
+
 	info.index = 0;
 	info.graph = graph;
 
-	snprintf(tmpfilename, sizeof(tmpfilename), "%s_tmp", filename);
-
-	info.fp = io_open_write(tmpfilename);
+	info.fp = io_open_write_tmp(tmpfilename);
 	if(!io_valid(info.fp))
 	{
 		printf( "%s: warning: error writing cache file '%s'\n", session.name, tmpfilename );
@@ -610,13 +625,12 @@ static int write_nodes(struct WRITEINFO *info)
 int depcache_save(const char *filename, struct GRAPH *graph)
 {
 	struct WRITEINFO info;
-	char tmpfilename[1024];
+	char tmpfilename[] = ".bam/depcacheXXXXXXXX";
+
 	info.index = 0;
 	info.graph = graph;
 
-	snprintf(tmpfilename, sizeof(tmpfilename), "%s_tmp", filename);
-
-	info.fp = io_open_write(tmpfilename);
+	info.fp = io_open_write_tmp(tmpfilename);
 	if(!io_valid(info.fp))
 	{
 		printf( "%s: warning: error writing cache file '%s'\n", session.name, tmpfilename );
@@ -829,14 +843,14 @@ int outputcache_save(const char *filename, struct OUTPUTCACHE *oldcache, struct 
 
 	struct CACHEINFO_OUTPUT * final;
 	unsigned finalcount;
-	char tmpfilename[1024];
-	snprintf(tmpfilename, sizeof(tmpfilename), "%s_tmp", filename);
+	char tmpfilename[] = ".bam/outputcacheXXXXXXXX";
 
 	time_t current_stamp = file_timestamp(filename);
+
 	if(cache_timestamp != current_stamp)
 		printf("%s: warning: cache file '%s' has been changed since cache load, will be overwritten (%08x,%08x), is bam called from bam?\n", session.name, filename, (unsigned)cache_timestamp, (unsigned)current_stamp);
 	
-	fp = io_open_write(tmpfilename);
+	fp = io_open_write_tmp(tmpfilename);
 	if(!io_valid(fp))
 	{
 		printf( "%s: warning: error writing cache file '%s'\n", session.name, tmpfilename );
