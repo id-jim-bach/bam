@@ -147,7 +147,7 @@ preserved in either mode.
 
 Run the focused output regression tests with the existing Python runtime:
 
-{{{{uv run python scripts/test_lua_errors.py}}}}
+{{{{python scripts/test_lua_errors.py}}}}
 
 They are also included in the main test suite (selector: lua_errors).
 Set BAM_MSBUILD to an installed MSBuild executable to check standard Exec

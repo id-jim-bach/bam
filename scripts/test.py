@@ -260,6 +260,11 @@ if len(tests) == 0 or "stat_thread" in tests:
 	if not test_stat_thread.run():
 		failed_tests += ["stat_thread"]
 
+if len(tests) == 0 or "lua_errors" in tests:
+	import test_lua_errors
+	if not test_lua_errors.run():
+		failed_tests += ["lua_errors"]
+
 if len(failed_tests):
 	print("FAILED TESTS:")
 	for t in failed_tests:
@@ -268,4 +273,3 @@ if len(failed_tests):
 else:
 	print("ALL TESTS PASSED!")
 	sys.exit(0)
-
