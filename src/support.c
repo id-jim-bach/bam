@@ -358,12 +358,160 @@ void atomic_flag_set(struct ATOMIC_FLAG *ptr)
 	void threads_yield() { Sleep(1); }
 #endif
 
+	static DWORD count_set_bits(ULONG_PTR bitMask)
+	{
+		DWORD LSHIFT = sizeof(ULONG_PTR) * 8 - 1;
+		DWORD bitSetCount = 0;
+		ULONG_PTR bitTest = (ULONG_PTR)1 << LSHIFT;
+		DWORD i;
+
+		for(i = 0; i <= LSHIFT; i++) {
+			bitSetCount += ((bitMask & bitTest) ? 1 : 0);
+			bitTest /= 2;
+		}
+
+		return bitSetCount;
+	}
+
+	typedef BOOL (WINAPI *LPFN_GLPIE)(LOGICAL_PROCESSOR_RELATIONSHIP, PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, PDWORD);
+
+	enum
+	{
+		LOCAL_RELATION_PROCESSOR_CORE = 0,
+		LOCAL_RELATION_NUMA_NODE,
+		LOCAL_RELATION_CACHE,
+		LOCAL_RELATION_PROCESSOR_PACKAGE,
+		LOCAL_RELATION_GROUP,
+		LOCAL_RELATION_ALL = 0xffff
+	};
+
+	struct CPU_INFO
+	{
+		int processorPackageCount;
+		int processorCoreCount;
+		int logicalProcessorCount;
+		int numaNodeCount;
+		int groupCount;
+		int logicalProcessorsPerGroup[16];
+		struct
+		{
+			int count;
+			int associativity;
+			int lineSize;
+			int size;
+		} cacheLevel[3];
+	};
+
+	static int get_cpu_info(struct CPU_INFO *cpuInfo)
+	{
+		char *buffer = NULL;
+		PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX ptr = NULL;
+		PCACHE_RELATIONSHIP Cache;
+		LPFN_GLPIE glpi;
+		DWORD returnLength = 0;
+		DWORD byteOffset = 0;
+		WORD groupIdx;
+
+		memset(cpuInfo, 0, sizeof(*cpuInfo));
+
+		glpi = (LPFN_GLPIE)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "GetLogicalProcessorInformationEx");
+		if(!glpi)
+			return 0;
+
+		while(FALSE == glpi(RelationAll, (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)buffer, &returnLength))
+		{
+			if(buffer)
+				free(buffer);
+			if(GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+				return 0;
+			buffer = (char*)malloc(returnLength);
+		}
+
+		ptr = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)buffer;
+
+		/*
+			Continue while ptr points to a whole SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX structure.
+			buffer contains returnLength bytes
+			ptr = buffer + byteOffset
+		*/
+		while(byteOffset + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) <= returnLength)
+		{
+			switch(ptr->Relationship)
+			{
+				case (LOGICAL_PROCESSOR_RELATIONSHIP)LOCAL_RELATION_PROCESSOR_CORE:
+					cpuInfo->processorCoreCount++;
+
+					/* A hyperthreaded core supplies more than one logical processor */
+					for(groupIdx = 0; groupIdx != ptr->Processor.GroupCount; ++groupIdx)
+					{
+						const ULONG_PTR mask = ptr->Processor.GroupMask[groupIdx].Mask;
+						const WORD group = ptr->Processor.GroupMask[groupIdx].Group;
+						const int count = count_set_bits(mask);
+						cpuInfo->logicalProcessorCount += count;
+						if(group < (sizeof(cpuInfo->logicalProcessorsPerGroup) / sizeof(cpuInfo->logicalProcessorsPerGroup[0])))
+							cpuInfo->logicalProcessorsPerGroup[group] += count;
+					}
+					break;
+
+				case (LOGICAL_PROCESSOR_RELATIONSHIP)LOCAL_RELATION_NUMA_NODE:
+					/* Non-NUMA systems report a single record of this type */
+					cpuInfo->numaNodeCount++;
+					break;
+
+				case (LOGICAL_PROCESSOR_RELATIONSHIP)LOCAL_RELATION_CACHE:
+					/* Cache data is in ptr->Cache, one CACHE_DESCRIPTOR structure for each cache */
+					Cache = &ptr->Cache;
+					if(Cache->Level >= 1 && Cache->Level <= 3)
+					{
+						int level = Cache->Level - 1;
+						if(cpuInfo->cacheLevel[level].count > 0)
+							cpuInfo->cacheLevel[level].count++;
+						else
+						{
+							cpuInfo->cacheLevel[level].associativity = Cache->Associativity;
+							cpuInfo->cacheLevel[level].lineSize = Cache->LineSize;
+							cpuInfo->cacheLevel[level].size = Cache->CacheSize;
+						}
+					}
+					break;
+
+				case (LOGICAL_PROCESSOR_RELATIONSHIP)LOCAL_RELATION_PROCESSOR_PACKAGE:
+					/* Logical processors share a physical package */
+					cpuInfo->processorPackageCount++;
+					break;
+
+				case (LOGICAL_PROCESSOR_RELATIONSHIP)LOCAL_RELATION_GROUP:
+					cpuInfo->groupCount = min(sizeof(cpuInfo->logicalProcessorsPerGroup) / sizeof(cpuInfo->logicalProcessorsPerGroup[0]), (int)ptr->Group.MaximumGroupCount);
+					break;
+
+				default:
+					break;
+			}
+			byteOffset += ptr->Size;
+			ptr = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)(buffer + byteOffset);
+		}
+
+		free(buffer);
+
+		/* Trim the number of reported groups to those that have reported logical processors */
+		while((cpuInfo->groupCount > 0) && (cpuInfo->logicalProcessorsPerGroup[cpuInfo->groupCount - 1] == 0))
+			--cpuInfo->groupCount;
+
+		return 1;
+	}
+	
 	int threads_corecount()
 	{
 		SYSTEM_INFO sysinfo;
+		struct CPU_INFO cpuInfo;
+
+		if(get_cpu_info(&cpuInfo))
+			return cpuInfo.logicalProcessorCount;
+
 		GetSystemInfo(&sysinfo);
 		if(sysinfo.dwNumberOfProcessors >= 1)
 			return sysinfo.dwNumberOfProcessors;
+
 		return 1;
 	}
 
