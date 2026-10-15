@@ -117,8 +117,8 @@ struct NODE
 	
 	unsigned short filename_len; /* length of filename including zero term */
 	
-	/* various flags (4 bytes in the end) */
-	unsigned dirty:8; /* non-zero if the node has to be rebuilt */
+	/* The worker's dirty byte must not share a bitfield memory location with Lua-written flags. */
+	unsigned char dirty;
 	unsigned depchecked:1; /* set if a dependency checker have processed the file */
 	unsigned targeted:1; /* set if this node is targeted for a build */
 	unsigned cached:1; /* set if the node should be considered as cached */
