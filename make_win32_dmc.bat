@@ -17,7 +17,7 @@ set "build_result=%errorlevel%"
 if errorlevel 1 goto cleanup
 if not "%build_result%"=="0" goto restore
 
-@dmc -Isrc/lua @files -o bam.exe
+@dmc -Isrc/lua @files -o bam.exe %*
 
 @REM ------ Restore everything
 :cleanup
