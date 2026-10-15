@@ -175,8 +175,9 @@ static struct OPTION options[] = {
 	/*@OPTION Threading ( -j N )
 		Sets the number of threads used when building. A good value for N is
 		the same number as logical cores on the machine. Set to 0 to disable.
+		Negative values subtract from the detected core count.
 	@END*/
-	{OF_PRINT, &option_threads_str,0		, "-j num", "sets the number of threads to use (default: auto, -v will show it)"},
+	{OF_PRINT, &option_threads_str,0		, "-j num", "sets the number of threads to use (default: auto; negative values subtract from detected cores)"},
 	{0, &option_threads_str, 0		, "-j", NULL},
 
 	/*@OPTION Script File ( -s FILENAME )
@@ -1178,8 +1179,12 @@ int main(int argc, char **argv)
 		session.threads = atoi(option_threads_str);
 		if(session.threads < 0)
 		{
-			printf("%s: invalid number of threads supplied\n", session.name);
-			return 1;
+			session.threads += threads_corecount();
+			if(session.threads < 0)
+			{
+				printf("%s: invalid number of threads supplied\n", session.name);
+				return 1;
+			}
 		}
 	}
 	else
